@@ -764,23 +764,25 @@ bool IS_SPEED_HACK(LPCHARACTER ch, LPCHARACTER victim, DWORD current_time)
 
 	if (ch->m_kAttackLog.dwVID == victim->GetVID())
 	{
-		if (current_time - ch->m_kAttackLog.dwTime < GET_ATTACK_SPEED(ch))
+		DWORD dwAttackSpeed = GET_ATTACK_SPEED(ch);
+		DWORD dwDelta = current_time - ch->m_kAttackLog.dwTime;
+		
+		// Allow some tolerance for network lag and weapon variations
+		DWORD dwMinSpeed = dwAttackSpeed * 8 / 10;  // 80% of calculated speed
+		
+		if (dwDelta < dwMinSpeed)
 		{
-			INCREASE_SPEED_HACK_COUNT(ch);
+			ch->m_iAttackViolations++;
+			
+			sys_log(0, "ATTACKSPEED: %s delta=%u limit=%u min=%u violations=%d", 
+				ch->GetName(), dwDelta, dwAttackSpeed, dwMinSpeed, ch->m_iAttackViolations);
 
-			if (test_server)
+			// Only kick if severely violating (less than 50% of required time)
+			if (dwDelta < (dwAttackSpeed / 2) && ch->m_iAttackViolations >= 15)
 			{
-				sys_log(0, "%s attack hack! time (delta, limit)=(%u, %u) hack_count %d",
-						ch->GetName(),
-						current_time - ch->m_kAttackLog.dwTime,
-						GET_ATTACK_SPEED(ch),
-						ch->m_speed_hack_count);
-
-				ch->ChatPacket(CHAT_TYPE_INFO, "%s attack hack! time (delta, limit)=(%u, %u) hack_count %d",
-						ch->GetName(),
-						current_time - ch->m_kAttackLog.dwTime,
-						GET_ATTACK_SPEED(ch),
-						ch->m_speed_hack_count);
+				sys_log(0, "ATTACKSPEED: %s kicked for severe speed violations", ch->GetName());
+				ch->GetDesc()->DelayedDisconnect(1);
+				return true;
 			}
 
 			SET_ATTACK_TIME(ch, victim, current_time);

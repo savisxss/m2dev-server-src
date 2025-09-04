@@ -1550,28 +1550,70 @@ void CInputMain::Move(LPCHARACTER ch, const char * data)
 	//	FUNC_SKILL = 0x80,
 	//};  
 
-	// 텔레포트 핵 체크
-
-//	if (!test_server)	//2012.05.15 김용욱 : 테섭에서 (무적상태로) 다수 몬스터 상대로 다운되면서 공격시 콤보핵으로 죽는 문제가 있었다.
 	{
 		const float fDist = DISTANCE_SQRT((ch->GetX() - pinfo->lX) / 100, (ch->GetY() - pinfo->lY) / 100);
+		DWORD dwCurTime = get_dword_time();
+		int iMoveSpeed = ch->GetLimitPoint(POINT_MOV_SPEED);
 
-		if (((false == ch->IsRiding() && fDist > 25) || fDist > 40) && OXEVENT_MAP_INDEX != ch->GetMapIndex())
+		// SMART Teleport Detection
+		if (ch->m_dwLastMoveTime > 0 && OXEVENT_MAP_INDEX != ch->GetMapIndex())
 		{
-			if( false == LC_IsEurope() )
+			DWORD dwTimeDiff = dwCurTime - ch->m_dwLastMoveTime;
+			
+			// Calculate theoretical max distance based on time and speed
+			float fMaxTheoreticalDist = (float)(iMoveSpeed * dwTimeDiff) / 1000.0f; // speed per second
+			if (ch->IsRiding())
+				fMaxTheoreticalDist *= 1.5f; // Horse bonus
+			
+			// Add network lag tolerance
+			fMaxTheoreticalDist += 5.0f; // 5m tolerance for lag/desync
+			
+			// INSTANT TELEPORT CHECK - if distance impossible even with max speed
+			if (fDist > fMaxTheoreticalDist + 10.0f && dwTimeDiff < 5000)
 			{
-				const PIXEL_POSITION & warpPos = ch->GetWarpPosition();
-
-				if (warpPos.x == 0 && warpPos.y == 0)
-					LogManager::instance().HackLog("Teleport", ch); // 부정확할 수 있음
+				// This is clearly impossible movement
+				ch->m_iMoveViolations++;
+				sys_log(0, "INSTANT_TELEPORT: %s moved %.1fm in %ums (max possible: %.1fm)", 
+					ch->GetName(), fDist, dwTimeDiff, fMaxTheoreticalDist);
+				
+				if (ch->m_iMoveViolations >= 3)
+				{
+					ch->GetDesc()->DelayedDisconnect(1);
+					LogManager::instance().HackLog("Instant_Teleport", ch);
+					return;
+				}
+				
+				ch->Show(ch->GetMapIndex(), ch->GetX(), ch->GetY(), ch->GetZ());
+				ch->Stop();
+				return;
 			}
-
-			sys_log(0, "MOVE: %s trying to move too far (dist: %.1fm) Riding(%d)", ch->GetName(), fDist, ch->IsRiding());
-
-			ch->Show(ch->GetMapIndex(), ch->GetX(), ch->GetY(), ch->GetZ());
-			ch->Stop();
-			return;
+			
+			if (dwTimeDiff > 100 && dwTimeDiff < 2000)
+			{
+				float fCurrentSpeed = (fDist * 1000.0f) / dwTimeDiff;
+				float fExpectedMaxSpeed = (float)iMoveSpeed / 100.0f;
+				if (ch->IsRiding())
+					fExpectedMaxSpeed *= 1.5f;
+				
+				if (fCurrentSpeed > fExpectedMaxSpeed * 1.5f)
+				{
+					ch->m_iMoveViolations++;
+					if (ch->m_iMoveViolations >= 8)
+					{
+						sys_log(0, "SPEED_VIOLATION: %s speed %.1f > %.1f", 
+							ch->GetName(), fCurrentSpeed, fExpectedMaxSpeed);
+						ch->GetDesc()->DelayedDisconnect(1);
+						return;
+					}
+				}
+			}
 		}
+		
+		
+		ch->m_dwLastMoveTime = dwCurTime;
+		ch->m_iPrevX = ch->GetX();
+		ch->m_iPrevY = ch->GetY();
+		ch->m_fLastMoveDistance = fDist;
 
 		//
 		// 스피드핵(SPEEDHACK) Check

@@ -1899,6 +1899,14 @@ class CHARACTER : public CEntity, public CFSM, public CHorseRider
 		AttackedLog m_AttackedLog;
 		int			m_speed_hack_count;
 
+		DWORD		m_dwLastMoveTime;
+		DWORD		m_dwLastAttackTime;
+		int			m_iPrevX, m_iPrevY;
+		int			m_iMoveViolations;
+		int			m_iAttackViolations;
+		float		m_fLastMoveDistance;
+		DWORD		m_dwMovementStartTime;
+
 	private :
 		std::string m_strNewName;
 

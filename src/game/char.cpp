@@ -183,6 +183,14 @@ void CHARACTER::Initialize()
 	m_pkFireEvent = NULL;
 	m_pkCheckSpeedHackEvent	= NULL;
 	m_speed_hack_count	= 0;
+	m_dwLastMoveTime = 0;
+	m_dwLastAttackTime = 0;
+	m_iPrevX = 0;
+	m_iPrevY = 0;
+	m_iMoveViolations = 0;
+	m_iAttackViolations = 0;
+	m_fLastMoveDistance = 0.0f;
+	m_dwMovementStartTime = 0;
 
 	m_pkAffectEvent = NULL;
 	m_afAffectFlag = TAffectFlag(0, 0);
@@ -7013,6 +7021,8 @@ EVENTFUNC(check_speedhack_event)
 	}
 
 	ch->m_speed_hack_count = 0;
+	ch->m_iMoveViolations = 0;
+	ch->m_iAttackViolations = 0;
 
 	ch->ResetComboHackCount();
 	return PASSES_PER_SEC(60);
